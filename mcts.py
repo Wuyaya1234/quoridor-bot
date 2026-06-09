@@ -4,27 +4,6 @@ from game_state import GameState
 
 import random
 
-def random_playout(state, max_moves=200):
-    copied_state = state.copy()
-
-    for _ in range(max_moves):
-        if copied_state.is_terminal():
-            break
-
-        legal_actions = copied_state.generate_legal_actions()
-        action = random.choice(legal_actions)
-        copied_state.apply_action(action)
-
-    winner = copied_state.get_winner()
-
-    if winner == "white":
-        return 1
-
-    if winner == "black":
-        return -1
-
-    return 0
-
 class Node:
 
     def __init__(self, state, parent=None, action_taken=None, prior=0):
@@ -50,6 +29,11 @@ class Node:
 
         legal_actions = self.state.generate_legal_actions()
 
+        if not legal_actions:
+            return
+
+        prior = 1 / len(legal_actions)
+
         for action in legal_actions:
             new_state = self.state.next_state(action)
 
@@ -57,19 +41,11 @@ class Node:
                 state=new_state,
                 parent=self,
                 action_taken=action,
-                prior=0
+                prior=prior
             )
 
             self.children[action] = child_node 
 
-    def backpropagate(self, value):
-        self.N += 1
-        self.W += value
-        self.Q = self.W / self.N
-
-        if self.parent is not None:
-            self.parent.backpropagate(value)
-    
     def select_child(self, c=1.0):
         best_child = None
         best_score = float("-inf")
@@ -83,24 +59,71 @@ class Node:
 
         return best_child
     
-    def run_simulation(self):
+    def backpropagate(self, value):
+        self.N += 1
+        self.W += value
+        self.Q = self.W / self.N
 
-        node = self
+        if self.parent is not None:
+            self.parent.backpropagate(value)
+
+
+
+class MCTS:
+    def __init__(self, simulations=100):
+        self.simulations = simulations
+
+    def search(self, state):
+        root = Node(state)
+
+        for _ in range(self.simulations):
+            self.run_simulation(root)
+
+        return self.select_action(root)
+
+    def run_simulation(self, root):
+        node = root
 
         while node.is_expanded():
             node = node.select_child()
 
-        value = random_playout(node.state)
+        value = self.random_playout(node.state)
 
-        node.expand()
+        if not node.state.is_terminal():
+            node.expand()
+
         node.backpropagate(value)
-    
 
-    def select_action(self):
+    def random_playout(self, state, max_moves=200):
+        copied_state = state.copy()
+
+        for _ in range(max_moves):
+            if copied_state.is_terminal():
+                break
+
+            legal_actions = copied_state.generate_legal_actions()
+
+            if not legal_actions:
+                break
+
+            action = random.choice(legal_actions)
+            copied_state.apply_action(action)
+
+        winner = copied_state.get_winner()
+
+        if winner == "white":
+            return 1
+
+        if winner == "black":
+            return -1
+
+        return 0
+
+    def select_action(self, root):
         best_action = None
         best_visit_count = -1
 
-        for action, child in self.children.items():
+        for action, child in root.children.items():
             if child.N > best_visit_count:
                 best_visit_count = child.N
                 best_action = action
@@ -110,15 +133,7 @@ class Node:
 
 
 
-state = GameState()
-
-root = Node(state)
-
-for _ in range(100):
-    root.run_simulation()
-    best_action = root.select_action()
-    print(best_action)
 
 
-for child in root.children.values():
-    print(child.N, child.Q)
+mcts = MCTS(simulations=100)
+print(mcts.search(GameState()))
