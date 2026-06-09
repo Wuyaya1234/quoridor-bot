@@ -16,6 +16,17 @@ Wall representation:
 BOARD_SIZE = 9
 STARTING_WALLS = 10
 
+ALL_WALL_ANCHORS = {
+    (0, 0), (0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),
+    (1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7),
+    (2, 0), (2, 1), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7),
+    (3, 0), (3, 1), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7),
+    (4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (4, 7),
+    (5, 0), (5, 1), (5, 2), (5, 3), (5, 4), (5, 5), (5, 6), (5, 7),
+    (6, 0), (6, 1), (6, 2), (6, 3), (6, 4), (6, 5), (6, 6), (6, 7),
+    (7, 0), (7, 1), (7, 2), (7, 3), (7, 4), (7, 5), (7, 6), (7, 7),
+}
+
 white_position = (4, 0)
 black_position = (4, 8)
 
@@ -29,7 +40,7 @@ current_player = "white"
 
 
 # -------------------------
-# Player position helpers
+# Player helpers
 # -------------------------
 
 def get_player_position(player):
@@ -55,6 +66,21 @@ def get_opponent_position(player):
 def is_square_occupied(position):
     return position == white_position or position == black_position
 
+def switch_player():
+    global current_player
+    if current_player == "white":
+        current_player = "black"
+    else:
+        current_player = "white"
+    
+def get_winner():
+    # returns white, black or None
+    if white_position[1] == BOARD_SIZE - 1:
+        return "white"
+    elif black_position[1] == 0:
+        return "black"
+    else:
+        return None
 
 # -------------------------
 # Board helpers
@@ -289,6 +315,36 @@ def is_legal_vertical_wall(player, x, y):
     return True
 
 
+def generate_legal_wall_moves(player):
+    legal_wall_moves = []
+
+    horizontal_candidates = ALL_WALL_ANCHORS.copy()
+    horizontal_candidates = horizontal_candidates - horizontal_walls
+    horizontal_candidates = horizontal_candidates - vertical_walls
+
+    for x, y in horizontal_walls:
+        horizontal_candidates.discard((x - 1, y))
+        horizontal_candidates.discard((x + 1, y))
+
+    for x, y in horizontal_candidates:
+        if is_legal_horizontal_wall(player, x, y):
+            legal_wall_moves.append(("horizontal_wall", x, y))
+
+    vertical_candidates = ALL_WALL_ANCHORS.copy()
+    vertical_candidates = vertical_candidates - vertical_walls
+    vertical_candidates = vertical_candidates - horizontal_walls
+
+    for x, y in vertical_walls:
+        vertical_candidates.discard((x, y - 1))
+        vertical_candidates.discard((x, y + 1))
+
+    for x, y in vertical_candidates:
+        if is_legal_vertical_wall(player, x, y):
+            legal_wall_moves.append(("vertical_wall", x, y))
+
+    return legal_wall_moves
+
+
 def place_vertical_wall(player, x, y):
     global white_walls, black_walls
 
@@ -302,6 +358,8 @@ def place_vertical_wall(player, x, y):
     elif player == "black":
         black_walls -= 1
 
+    switch_player()
+    
     return True
 
 
@@ -485,6 +543,39 @@ def generate_legal_pawn_moves(player):
             legal_moves.append(end_position)
 
     return legal_moves
+
+
+def move_pawn(player, end):
+    global white_position, black_position
+    if not is_legal_pawn_move(player, end):
+        return False
+    
+    if player == "white":
+        white_position = end
+    elif player == "black":
+        black_position = end
+
+    winner = get_winner()
+
+    if winner == "white":
+        print("white wins")
+        return True
+    elif winner == "black":
+        print("black wins")
+        return True
+
+    switch_player()
+
+
+    return True
+
+
+def generate_legal_actions(player):
+
+    generate_legal_pawn_moves()
+    generate_legal_wall_moves()
+
+
 
 
 # -------------------------
