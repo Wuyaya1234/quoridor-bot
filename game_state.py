@@ -86,22 +86,95 @@ def are_adjacent(start, end):
 def is_valid_wall_position(x, y):
     return 0 <= x < BOARD_SIZE - 1 and 0 <= y < BOARD_SIZE - 1
 
-
-def place_horizontal_wall(x, y):
+def is_legal_horizontal_wall(player, x, y):
+    if player != "white" and player != "black":
+        return False
+    
     if not is_valid_wall_position(x, y):
-        print("Invalid horizontal wall position")
+        return False
+
+    if player == None :
+        print("invalid palyer")
+        return False
+
+    if player == "white" and white_walls <= 0:
+        return False
+
+    if player == "black" and black_walls <= 0:
+        return False
+    
+    if (x, y) in horizontal_walls:
+        return False
+
+    if (x - 1, y) in horizontal_walls:
+        return False
+
+    if (x + 1, y) in horizontal_walls:
+        return False
+    
+    if (x, y) in vertical_walls:
+        return False
+
+    return True
+
+def place_horizontal_wall(player, x, y):
+    global white_walls, black_walls
+
+    if not is_legal_horizontal_wall(player, x, y):
         return False
 
     horizontal_walls.add((x, y))
+
+    if player == "white":
+        white_walls -= 1
+    elif player == "black":
+        black_walls -= 1
+
     return True
 
-
-def place_vertical_wall(x, y):
-    if not is_valid_wall_position(x, y):
-        print("Invalid vertical wall position")
+def is_legal_vertical_wall(player, x, y):
+    if player != "white" and player != "black":
+        print("invalid player")
+        return False
+    
+    if player == "white" and white_walls <= 0:
+        return False
+    
+    if player == "black" and black_walls <= 0:
         return False
 
+    if not is_valid_wall_position(x, y):
+        return False
+
+    if (x, y) in vertical_walls:
+        return False
+    
+    
+    if (x, y + 1) in vertical_walls:
+        return False
+    
+    if (x, y - 1) in vertical_walls:
+        return False
+    
+    if (x, y) in horizontal_walls:
+        return False
+
+    return True
+
+def place_vertical_wall(player, x, y):
+    global white_walls, black_walls
+
+    if not is_legal_vertical_wall(player, x, y):
+        return False
+    
+
     vertical_walls.add((x, y))
+
+    if player == "white":
+        white_walls -= 1
+    elif player == "black":
+        black_walls -= 1
+
     return True
 
 
@@ -278,33 +351,48 @@ def is_legal_pawn_move(player, end):
 
     return False
 
+def generate_legal_pawn_moves(player):
+    player_position = get_player_position(player)
+
+    if player_position == None:
+        print("invalid player position")
+        return []
+
+    x, y = player_position
+
+    candidate_moves = [
+        # Adjacent moves
+        (x + 1, y),
+        (x - 1, y),
+        (x, y + 1),
+        (x, y - 1),
+
+        # Straight jumps
+        (x + 2, y),
+        (x - 2, y),
+        (x, y + 2),
+        (x, y - 2),
+
+        # Diagonal jumps
+        (x + 1, y + 1),
+        (x + 1, y - 1),
+        (x - 1, y + 1),
+        (x - 1, y - 1),
+    ]
+    legal_moves = []
+    for end_position in candidate_moves :
+        if is_legal_pawn_move(player, end_position) :
+            legal_moves.append(end_position)
+
+    return legal_moves
+
 
 # -------------------------
 # Test code
 
-# Basic move
-print(is_legal_pawn_move("white", (4, 1)))  # True
-
-# Blocked by wall
-horizontal_walls.add((4, 0))
-print(is_legal_pawn_move("white", (4, 1)))  # False
-
-# Reset wall
-horizontal_walls.clear()
-
-# Straight jump test
-white_position = (4, 4)
-black_position = (4, 5)
-print(is_legal_pawn_move("white", (4, 6)))  # True
-
-# Diagonal jump test
-horizontal_walls.add((4, 5))
-print(is_legal_pawn_move("white", (3, 5)))  # True
-print(is_legal_pawn_move("white", (5, 5)))  # True
-# -------------------------
-
-print(is_legal_pawn_move("white", (4, 1)))  # True at starting position
-print(is_legal_pawn_move("white", (4, 2)))  # False, too far
+print(white_walls)
+place_vertical_wall("white", 4, 4)
+print(white_walls)
 
 
 
