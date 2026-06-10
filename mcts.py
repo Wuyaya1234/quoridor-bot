@@ -4,10 +4,29 @@ from game_state import GameState
 
 import random
 
-class Node:
+class SimpleEvaluator:
+    def __init__(self):
+        pass
+    
+    def evaluate(self, state):
+        legal_actions = state.generate_legal_actions()
 
+        if not legal_actions:
+            return {}, 0
+        
+        equal_prior = 1/ len(legal_actions)
+
+        policy = {}
+        for action in legal_actions:
+            policy[action] = equal_prior
+        
+        value = 0
+
+        return policy, value
+
+
+class Node:
     def __init__(self, state, parent=None, action_taken=None, prior=0):
-        # your code here
         self.state = state
         self.parent = parent
         self.action_taken = action_taken
@@ -19,82 +38,114 @@ class Node:
 
         self.children = {}
 
-
     def is_expanded(self):
         return bool(self.children)
 
-    def expand(self):
+    def expand(self, policy=None):
         if self.is_expanded():
-            return 
+            return
 
         legal_actions = self.state.generate_legal_actions()
 
         if not legal_actions:
             return
 
-        prior = 1 / len(legal_actions)
+        # If no policy is provided, treat every legal move equally.
+        if policy is None:
+            equal_prior = 1 / len(legal_actions)
+            policy = {}
+
+            for action in legal_actions:
+                policy[action] = equal_prior
 
         for action in legal_actions:
             new_state = self.state.next_state(action)
+
+            # This should not happen if generate_legal_actions() is correct,
+            # but it protects MCTS from crashing if there is a bug elsewhere.
+            if new_state is None:
+                continue
 
             child_node = Node(
                 state=new_state,
                 parent=self,
                 action_taken=action,
-                prior=prior
+                prior=policy.get(action, 0)
             )
 
-            self.children[action] = child_node 
+            self.children[action] = child_node
 
     def select_child(self, c=1.0):
         best_child = None
         best_score = float("-inf")
 
         for child in self.children.values():
-            score = child.Q + c * child.P * (self.N ** 0.5) / (1 + child.N)
+            # child.Q is from the child player's perspective.
+            # The current player wants the child position to be bad for the opponent.
+            exploitation_score = -child.Q
+
+            exploration_score = c * child.P * (self.N ** 0.5) / (1 + child.N)
+
+            score = exploitation_score + exploration_score
 
             if score > best_score:
                 best_score = score
                 best_child = child
 
         return best_child
-    
+
     def backpropagate(self, value):
         self.N += 1
         self.W += value
         self.Q = self.W / self.N
 
+        # Flip the value when moving to the parent,
+        # because the parent is the opponent's perspective.
         if self.parent is not None:
-            self.parent.backpropagate(value)
-
+            self.parent.backpropagate(-value)
 
 
 class MCTS:
-    def __init__(self, simulations=100):
+    def __init__(self, simulations=100, evaluator=None):
         self.simulations = simulations
 
-    def search(self, state):
+        if evaluator is None:
+            self.evaluator = SimpleEvaluator()
+        else:
+            self.evaluator = evaluator
+
+    def search(self, state, debug=False):
         root = Node(state)
 
         for _ in range(self.simulations):
             self.run_simulation(root)
+
+        if debug:
+            self.print_root_stats(root)
 
         return self.select_action(root)
 
     def run_simulation(self, root):
         node = root
 
+        # Selection phase:
+        # Move down the tree while the current node has children.
         while node.is_expanded():
             node = node.select_child()
 
-        value = self.random_playout(node.state)
+        # Evaluation phase:
+        policy, value = self.evaluator.evaluate(node.state)
 
+        # Expansion phase:
+        # Expand the leaf after evaluating it.
         if not node.state.is_terminal():
-            node.expand()
+            node.expand(policy)
 
+        # Backpropagation phase:
+        # Send the value back up the tree.
         node.backpropagate(value)
 
-    def random_playout(self, state, max_moves=200):
+    def random_playout(self, state, player_to_value_for, max_moves=200):
         copied_state = state.copy()
 
         for _ in range(max_moves):
@@ -111,13 +162,13 @@ class MCTS:
 
         winner = copied_state.get_winner()
 
-        if winner == "white":
+        if winner == player_to_value_for:
             return 1
 
-        if winner == "black":
-            return -1
+        if winner is None:
+            return 0
 
-        return 0
+        return -1
 
     def select_action(self, root):
         best_action = None
@@ -130,10 +181,127 @@ class MCTS:
 
         return best_action
 
+    def print_root_stats(self, root, top_n=10):
+        sorted_children = sorted(
+            root.children.items(),
+            key=lambda item: item[1].N,
+            reverse=True
+        )
+
+        print()
+        print(f"Top {top_n} root moves:")
+        print("--------------------")
+
+        for action, child in sorted_children[:top_n]:
+            # child.Q is from the opponent's perspective after root plays action.
+            # So -child.Q is the root player's view of that move.
+            root_view_q = -child.Q
+
+            print(
+                f"Action: {action}, "
+                f"N: {child.N}, "
+                f"Q from child view: {child.Q:.3f}, "
+                f"Q from root view: {root_view_q:.3f}, "
+                f"P: {child.P:.3f}"
+            )
 
 
+# -------------------------
+# Basic MCTS tests
+# -------------------------
+
+def test_node_expansion():
+    state = GameState()
+    root = Node(state)
+
+    assert root.is_expanded() is False
+
+    root.expand()
+
+    legal_actions = state.generate_legal_actions()
+
+    assert root.is_expanded() is True
+    assert len(root.children) == len(legal_actions)
+
+    for action, child in root.children.items():
+        assert action in legal_actions
+        assert child.parent is root
+        assert child.action_taken == action
+        assert child.state is not state
+        assert child.P > 0
+
+    print("test_node_expansion passed")
 
 
+def test_backpropagation_flips_value():
+    state = GameState()
+    root = Node(state)
 
-mcts = MCTS(simulations=100)
-print(mcts.search(GameState()))
+    action = ("pawn", (4, 1))
+    child_state = state.next_state(action)
+
+    child = Node(
+        state=child_state,
+        parent=root,
+        action_taken=action,
+        prior=1
+    )
+
+    root.children[action] = child
+
+    # +1 means good for the child node's current player.
+    child.backpropagate(1)
+
+    assert child.N == 1
+    assert child.W == 1
+    assert child.Q == 1
+
+    # Root gets the opposite value because root is the opponent's perspective.
+    assert root.N == 1
+    assert root.W == -1
+    assert root.Q == -1
+
+    print("test_backpropagation_flips_value passed")
+
+
+def test_mcts_returns_legal_action():
+    state = GameState()
+    mcts = MCTS(simulations=20)
+
+    best_action = mcts.search(state)
+
+    legal_actions = state.generate_legal_actions()
+
+    assert best_action in legal_actions
+
+    print("test_mcts_returns_legal_action passed")
+
+
+def run_tests():
+    test_node_expansion()
+    test_backpropagation_flips_value()
+    test_mcts_returns_legal_action()
+
+    print()
+    print("All MCTS tests passed")
+
+
+# -------------------------
+# Manual run
+# -------------------------
+
+if __name__ == "__main__":
+    random.seed(1)
+
+    run_tests()
+
+    print()
+    print("Running MCTS search...")
+
+    state = GameState()
+
+    mcts = MCTS(simulations=100)
+    best_action = mcts.search(state, debug=True)
+
+    print()
+    print("Best action:", best_action)

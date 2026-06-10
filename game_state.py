@@ -1,4 +1,6 @@
 """
+game_state.py
+
 Quoridor game state representation.
 
 Coordinate system:
