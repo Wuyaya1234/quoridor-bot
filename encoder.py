@@ -76,6 +76,17 @@ def decode_action(action_id):
     return ("vertical_wall", (x, y))
 
 
+def encode_visit_policy(visit_policy):
+    encoded_policy = np.zeros(TOTAL_ACTIONS, dtype=np.float32)
+
+    for action, probability in visit_policy.items():
+        action_id = encode_action(action)
+
+        if action_id is not None:
+            encoded_policy[action_id] = probability
+
+    return encoded_policy
+
 
 
 # -------------------------
@@ -161,11 +172,31 @@ def test_encode_and_decode_actions():
 
     print("test_encode_and_decode_actions passed")
 
+
+def test_encode_visit_policy():
+    visit_policy = {
+        ("pawn", (4, 1)): 0.7,
+        ("vertical_wall", (6, 2)): 0.3,
+    }
+
+    encoded_policy = encode_visit_policy(visit_policy)
+
+    assert encoded_policy.shape == (TOTAL_ACTIONS,)
+
+    assert encoded_policy[13] == 0.7
+    assert encoded_policy[167] == 0.3
+
+    assert abs(encoded_policy.sum() - 1) < 0.000001
+
+    print("test_encode_visit_policy passed")
+
+
 def run_tests():
     test_encode_starting_state()
     test_encode_walls()
     test_encode_black_to_move()
     test_encode_and_decode_actions()
+    test_encode_visit_policy()
 
     print()
     print("All encoder tests passed")
