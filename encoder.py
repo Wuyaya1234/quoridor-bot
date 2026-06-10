@@ -77,6 +77,7 @@ def decode_action(action_id):
 
 
 def encode_visit_policy(visit_policy):
+    #turns action to id. E.G. pawn(0,0) --> 00 
     encoded_policy = np.zeros(TOTAL_ACTIONS, dtype=np.float32)
 
     for action, probability in visit_policy.items():
@@ -88,6 +89,24 @@ def encode_visit_policy(visit_policy):
     return encoded_policy
 
 
+def encode_training_examples(examples):
+    encoded_states = []
+    encoded_policies = []
+    encoded_values = []
+
+    for state, visit_policy, value in examples:
+        encoded_state = encode_state(state)
+        encoded_policy = encode_visit_policy(visit_policy)
+
+        encoded_states.append(encoded_state)
+        encoded_policies.append(encoded_policy)
+        encoded_values.append(value)
+
+    states = np.array(encoded_states, dtype=np.float32)
+    policies = np.array(encoded_policies, dtype=np.float32)
+    values = np.array(encoded_values, dtype=np.float32)
+
+    return states, policies, values
 
 # -------------------------
 # Encoder tests
@@ -191,12 +210,38 @@ def test_encode_visit_policy():
     print("test_encode_visit_policy passed")
 
 
+def test_encode_training_examples():
+    state = GameState()
+
+    visit_policy = {
+        ("pawn", (4, 1)): 1.0,
+    }
+
+    value = 1
+
+    examples = [
+        (state, visit_policy, value)
+    ]
+
+    states, policies, values = encode_training_examples(examples)
+
+    assert states.shape == (1, 5, BOARD_SIZE, BOARD_SIZE)
+    assert policies.shape == (1, TOTAL_ACTIONS)
+    assert values.shape == (1,)
+
+    assert states[0][0][0][4] == 1
+    assert policies[0][13] == 1.0
+    assert values[0] == 1
+
+    print("test_encode_training_examples passed")
+
 def run_tests():
     test_encode_starting_state()
     test_encode_walls()
     test_encode_black_to_move()
     test_encode_and_decode_actions()
     test_encode_visit_policy()
+    test_encode_training_examples()
 
     print()
     print("All encoder tests passed")
