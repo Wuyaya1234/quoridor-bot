@@ -123,7 +123,10 @@ class MCTS:
         if debug:
             self.print_root_stats(root)
 
-        return self.select_action(root)
+        best_action = self.select_action(root)
+        visit_policy = self.get_visit_policy(root)
+
+        return best_action, visit_policy
 
     def run_simulation(self, root):
         node = root
@@ -205,6 +208,80 @@ class MCTS:
                 f"P: {child.P:.3f}"
             )
 
+    def get_visit_policy(self, root): 
+        children = root.children
+        visit_policy = {}
+
+        if not children:
+            return {}
+
+        total_visits = 0
+
+        for child in children.values():
+            total_visits += child.N
+
+        if total_visits == 0:
+            equal_propability = 1 / len(children)
+
+            for action in children:
+                visit_policy[action] = equal_propability
+
+                return visit_policy
+
+
+        for action, child in children.items():
+            visit_policy[action] = child.N / total_visits
+        
+        return visit_policy
+
+    def sample_action_from_policy(self, visit_policy):
+        if not visit_policy:
+            return None
+
+        actions = list(visit_policy.keys())
+        probabilities = list(visit_policy.values())
+
+        action = random.choices(actions, weights=probabilities, k=1)[0]
+
+        return action
+
+    def self_play_game(self, max_moves=100):
+        state = GameState()
+        training_examples = []
+
+        for _ in range(max_moves):
+            if state.is_terminal():
+                break
+
+            current_player = state.current_player
+
+            best_action, visit_policy = self.search(state)
+
+            action = self.sample_action_from_policy(visit_policy)
+
+            training_examples.append(
+                (state.copy(), visit_policy, current_player)
+            )
+
+            state.apply_action(action)
+
+        winner = state.get_winner()
+
+        final_examples = []
+
+        for old_state, visit_policy, player in training_examples:
+            if winner is None:
+                value = 0
+            elif winner == player:
+                value = 1
+            else:
+                value = -1
+
+            final_examples.append(
+                (old_state, visit_policy, value)
+            )
+
+        return final_examples, winner
 
 # -------------------------
 # Basic MCTS tests
@@ -268,19 +345,40 @@ def test_mcts_returns_legal_action():
     state = GameState()
     mcts = MCTS(simulations=20)
 
-    best_action = mcts.search(state)
+    best_action, visit_policy = mcts.search(state)
 
     legal_actions = state.generate_legal_actions()
 
     assert best_action in legal_actions
+    assert isinstance(visit_policy, dict)
+    assert best_action in visit_policy
+    total_probability = sum(visit_policy.values())
+
+    assert abs(total_probability - 1) < 0.000001
 
     print("test_mcts_returns_legal_action passed")
+
+
+def test_sample_action_from_policy_returns_valid_action():
+    mcts = MCTS()
+
+    visit_policy = {
+        ("pawn", (4, 1)): 0.75,
+        ("pawn", (3, 0)): 0.25,
+    }
+
+    action = mcts.sample_action_from_policy(visit_policy)
+
+    assert action in visit_policy
+
+    print("test_sample_action_from_policy_returns_valid_action passed")
 
 
 def run_tests():
     test_node_expansion()
     test_backpropagation_flips_value()
     test_mcts_returns_legal_action()
+    test_sample_action_from_policy_returns_valid_action()
 
     print()
     print("All MCTS tests passed")
@@ -300,8 +398,14 @@ if __name__ == "__main__":
 
     state = GameState()
 
-    mcts = MCTS(simulations=100)
-    best_action = mcts.search(state, debug=True)
+    mcts = MCTS(simulations=10)
+    best_action, visit_policy = mcts.search(state, debug=False)
 
     print()
     print("Best action:", best_action)
+
+
+    examples, winner = mcts.self_play_game(max_moves=500)
+
+    print("Winner:", winner)
+    print("Number of examples:", len(examples))
