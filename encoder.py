@@ -5,6 +5,12 @@ import numpy as np
 from game_state import GameState, BOARD_SIZE
 
 
+PAWN_ACTIONS = BOARD_SIZE * BOARD_SIZE
+WALL_GRID_SIZE = BOARD_SIZE - 1
+WALL_ACTIONS = WALL_GRID_SIZE * WALL_GRID_SIZE
+TOTAL_ACTIONS = PAWN_ACTIONS + WALL_ACTIONS + WALL_ACTIONS
+
+
 def encode_state(state):
     encoded = np.zeros((5, BOARD_SIZE, BOARD_SIZE), dtype=np.float32)
 
@@ -31,6 +37,45 @@ def encode_state(state):
         encoded[4][:, :] = 1
 
     return encoded
+
+
+def encode_action(action):
+    action_type, position = action
+    x, y = position
+
+    if action_type == "pawn":
+        return y * BOARD_SIZE + x
+
+    if action_type == "horizontal_wall":
+        return PAWN_ACTIONS + y * WALL_GRID_SIZE + x
+
+    if action_type == "vertical_wall":
+        return PAWN_ACTIONS + WALL_ACTIONS + y * WALL_GRID_SIZE + x
+
+    return None
+
+
+def decode_action(action_id):
+    if action_id < 0 or action_id >= TOTAL_ACTIONS:
+        return None
+
+    if action_id < PAWN_ACTIONS:
+        x = action_id % BOARD_SIZE
+        y = action_id // BOARD_SIZE
+        return ("pawn", (x, y))
+
+    if action_id < PAWN_ACTIONS + WALL_ACTIONS:
+        wall_id = action_id - PAWN_ACTIONS
+        x = wall_id % WALL_GRID_SIZE
+        y = wall_id // WALL_GRID_SIZE
+        return ("horizontal_wall", (x, y))
+
+    wall_id = action_id - PAWN_ACTIONS - WALL_ACTIONS
+    x = wall_id % WALL_GRID_SIZE
+    y = wall_id // WALL_GRID_SIZE
+    return ("vertical_wall", (x, y))
+
+
 
 
 # -------------------------
@@ -90,10 +135,37 @@ def test_encode_black_to_move():
     print("test_encode_black_to_move passed")
 
 
+def test_encode_and_decode_actions():
+    actions = [
+        ("pawn", (4, 1)),
+        ("horizontal_wall", (3, 5)),
+        ("vertical_wall", (6, 2)),
+    ]
+
+    for action in actions:
+        action_id = encode_action(action)
+        decoded_action = decode_action(action_id)
+
+        assert decoded_action == action
+
+    assert encode_action(("pawn", (4, 1))) == 13
+    assert encode_action(("horizontal_wall", (3, 5))) == 124
+    assert encode_action(("vertical_wall", (6, 2))) == 167
+
+    assert decode_action(13) == ("pawn", (4, 1))
+    assert decode_action(124) == ("horizontal_wall", (3, 5))
+    assert decode_action(167) == ("vertical_wall", (6, 2))
+
+    assert decode_action(-1) is None
+    assert decode_action(TOTAL_ACTIONS) is None
+
+    print("test_encode_and_decode_actions passed")
+
 def run_tests():
     test_encode_starting_state()
     test_encode_walls()
     test_encode_black_to_move()
+    test_encode_and_decode_actions()
 
     print()
     print("All encoder tests passed")
