@@ -221,13 +221,12 @@ class MCTS:
             total_visits += child.N
 
         if total_visits == 0:
-            equal_propability = 1 / len(children)
+            equal_probability = 1 / len(children)
 
             for action in children:
-                visit_policy[action] = equal_propability
+                visit_policy[action] = equal_probability
 
-                return visit_policy
-
+            return visit_policy
 
         for action, child in children.items():
             visit_policy[action] = child.N / total_visits
@@ -373,12 +372,75 @@ def test_sample_action_from_policy_returns_valid_action():
 
     print("test_sample_action_from_policy_returns_valid_action passed")
 
+def test_self_play_game_returns_valid_examples():
+    random.seed(1)
+
+    mcts = MCTS(simulations=5)
+
+    examples, winner = mcts.self_play_game(max_moves=20)
+
+    # self_play_game should return a list of training examples.
+    assert isinstance(examples, list)
+
+    # winner should either be one of the two players, or None if max_moves was reached.
+    assert winner == "white" or winner == "black" or winner is None
+
+    for example in examples:
+        # Each example should have exactly:
+        # state, visit_policy, value
+        assert len(example) == 3
+
+        state, visit_policy, value = example
+
+        # State should be a copied GameState object.
+        assert isinstance(state, GameState)
+
+        # visit_policy should map action -> probability.
+        assert isinstance(visit_policy, dict)
+
+        # value should be from the stored player's perspective:
+        # +1 = that player won
+        # -1 = that player lost
+        # 0 = draw / no winner
+        assert value in [-1, 0, 1]
+
+        # If the visit policy is non-empty, probabilities should add up to 1.
+        if visit_policy:
+            total_probability = sum(visit_policy.values())
+            assert abs(total_probability - 1) < 0.000001
+
+            for action, probability in visit_policy.items():
+                # Action should look like:
+                # ("pawn", (x, y))
+                # ("horizontal_wall", (x, y))
+                # ("vertical_wall", (x, y))
+                assert isinstance(action, tuple)
+                assert len(action) == 2
+
+                action_type, position = action
+
+                assert action_type in [
+                    "pawn",
+                    "horizontal_wall",
+                    "vertical_wall",
+                ]
+
+                assert isinstance(position, tuple)
+                assert len(position) == 2
+
+                # Probability should be valid.
+                assert probability >= 0
+                assert probability <= 1
+
+    print("test_self_play_game_returns_valid_examples passed")
+
 
 def run_tests():
     test_node_expansion()
     test_backpropagation_flips_value()
     test_mcts_returns_legal_action()
     test_sample_action_from_policy_returns_valid_action()
+    test_self_play_game_returns_valid_examples()
 
     print()
     print("All MCTS tests passed")
@@ -404,8 +466,7 @@ if __name__ == "__main__":
     print()
     print("Best action:", best_action)
 
-
-    examples, winner = mcts.self_play_game(max_moves=500)
+    examples, winner = mcts.self_play_game(max_moves=50)
 
     print("Winner:", winner)
     print("Number of examples:", len(examples))
